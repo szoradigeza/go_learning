@@ -46,6 +46,7 @@ func (c *Client) Read() {
 		if c.Pool != nil {
 			c.Pool.Unregister <- c
 		}
+
 		c.Conn.Close()
 	}()
 
@@ -61,7 +62,8 @@ func (c *Client) Read() {
 		log.Printf("Message Received: %+v\n", message)
 
 		if message.Action == "getForm" {
-			data := getFormData()[message.Id]
+			data := getFormData()[message.Id-1]
+			c.Id = message.Id
 			log.Println("send data ", data)
 			c.Conn.WriteJSON(data)
 			newClientConnection := ClientConnection{id: message.Id, client: c}
