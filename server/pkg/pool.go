@@ -1,6 +1,9 @@
 package ws
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+)
 
 type Pool struct {
 	Register   chan *Client
@@ -26,6 +29,10 @@ func (p *Pool) Start() {
 			fmt.Println("Size of Connection Pool: ", len(p.Clients))
 		case client := <-p.Unregister:
 			delete(p.Clients, client)
+			if len(client.Pool.Clients) == 0 {
+				client.FormPoolController.RemovePool(client.Id)
+				log.Println(len(client.Pool.Clients))
+			}
 		case message := <-p.Broadcast:
 			fmt.Println("Size of Connection Pool: ", len(p.Clients))
 			for client := range p.Clients {

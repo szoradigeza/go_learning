@@ -43,17 +43,27 @@ func (controller *FormPoolController) FindPool(key int) (*Pool, bool) {
 	return &Pool{}, false
 }
 
+func (controller *FormPoolController) RemovePool(formId int) {
+	for i, formPool := range controller.FormPools {
+		for key := range formPool {
+			if key == formId {
+				controller.FormPools = append(controller.FormPools[:i], controller.FormPools[i+1:]...)
+				return
+			}
+		}
+	}
+}
+
 func (fpc *FormPoolController) Start() {
 	for {
 		select {
 		case cc := <-fpc.Register:
 			pool, found := fpc.FindPool(cc.id)
 			if found {
-				log.Println("pool found")
 				cc.client.Pool = pool
 				pool.Register <- cc.client
 			} else {
-				log.Println("create pool")
+				log.Printf("New Pool")
 				pool = NewPool()
 				go pool.Start()
 				cc.client.Pool = pool
