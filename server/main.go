@@ -3,12 +3,11 @@ package main
 import (
 	//"fmt"
 
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
+	ws "server/pkg"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -43,83 +42,30 @@ func (s *Server) handleClose(connToRemove *websocket.Conn) {
 	fmt.Println(s.conns)
 }
 
-func getFormData() []FormMock {
-	mockData, _ := os.ReadFile("form.json")
-	var data []FormMock
-	err := json.Unmarshal(mockData, &data)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return data
-}
-
-func (s *Server) handleWs(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(r)
+func (s *Server) handleWs(fpController *ws.FormPoolController, w http.ResponseWriter, r *http.Request) {
+	fmt.Println("handleWs")
 	conn, err := upgrader.Upgrade(w, r, nil)
-
-	s.conns[conn] = generateClientID()
-
 	if err != nil {
-		log.Println(err)
-		return
+		fmt.Fprintf(w, "%+v\n", err)
 	}
 
-	defer s.handleClose(conn)
-
-	for {
-		broadcastMessage := BroadcastMessage{}
-		err := conn.ReadJSON(&broadcastMessage)
-		if err != nil {
-			log.Println(err)
-			break
-		}
-
-		log.Printf("Received: %s\n", broadcastMessage)
-
-		s.broadcast(broadcastMessage, conn)
-
-	}
-}
-
-func handleGetForm(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	data := getFormData()[0]
-
-	jsonBytes, err := json.Marshal(data)
-	if err != nil {
-		log.Fatal(err)
+	client := ws.Client{
+		Conn:               conn,
+		FormPoolController: fpController,
 	}
 
-	w.Write(jsonBytes)
-}
-
-type BroadcastMessage struct {
-	User  string `json:"user"`
-	Value string `json:"value"`
-}
-
-func (s *Server) broadcast(broadcastMessage BroadcastMessage, exception *websocket.Conn) {
-	for conn := range s.conns {
-		if conn == exception {
-			continue
-		}
-
-		conn.WriteJSON(broadcastMessage)
-	}
-}
-
-type FormMock struct {
-	Status string `json:"status"`
-	Value  string `json:"value"`
+	client.Read()
 }
 
 func main() {
 	flag.Parse()
 	server := newServer()
-	http.HandleFunc("/ws", server.handleWs)
-	http.HandleFunc("GET /form/{id}", handleGetForm)
+	fpController := ws.NewFormPoolController()
+	go fpController.Start()
+
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		server.handleWs(fpController, w, r)
+	})
 
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }
